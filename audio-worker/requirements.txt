@@ -1,0 +1,8 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+numpy<2
+torch==2.2.2+cpu
+torchaudio==2.2.2+cpu
+transkun==2.0.1
+basic-pitch==0.4.0
+mido==1.3.3
+yt-dlp[default] @ https://github.com/yt-dlp/yt-dlp/archive/refs/tags/2026.06.09.tar.gz

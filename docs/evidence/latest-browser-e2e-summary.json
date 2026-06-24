@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "elapsedSeconds": 21,
+  "url": "http://127.0.0.1:3001/",
+  "title": "SolvysMIDI",
+  "heading": "Reverie – Jason Fervento | Relaxing Piano Music",
+  "waveformBars": 64,
+  "status": "Reverie – Jason Fervento | Relaxing Piano Music ready as Playable two-hand piano",
+  "consoleIssues": [],
+  "screenshots": [
+    "/tmp/solvys-midi-browser-mobile-start.png",
+    "/tmp/solvys-midi-browser-e2e.png"
+  ]
+}

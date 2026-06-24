@@ -1,0 +1,45 @@
+{
+  "ok": true,
+  "byteLength": 10368,
+  "durationSeconds": 176.3840909090909,
+  "sourceAudioDurationSeconds": 176.384,
+  "expectedUserDurationSeconds": 179,
+  "durationDeltaFromSourceSeconds": 0.00009090909091469257,
+  "durationDeltaFromUserSeconds": 2.615909090909099,
+  "totalMusicalNotes": 1379,
+  "totalMidiNotesIncludingTimelineMarker": 1380,
+  "tracks": [
+    {
+      "name": "Left Hand",
+      "notes": 728,
+      "firstNoteTime": 2,
+      "lastNoteEnd": 175.25,
+      "minMidi": 29,
+      "maxMidi": 59,
+      "minVelocity": 0.2283464566929134,
+      "maxVelocity": 0.7637795275590551
+    },
+    {
+      "name": "Right Hand",
+      "notes": 651,
+      "firstNoteTime": 2.125,
+      "lastNoteEnd": 174.875,
+      "minMidi": 60,
+      "maxMidi": 91,
+      "minVelocity": 0.2755905511811024,
+      "maxVelocity": 0.8188976377952756
+    },
+    {
+      "name": "Timeline",
+      "notes": 1,
+      "firstNoteTime": 176.38181818181818,
+      "lastNoteEnd": 176.3840909090909,
+      "minMidi": 21,
+      "maxMidi": 21,
+      "minVelocity": 0.007874015748031496,
+      "maxVelocity": 0.007874015748031496
+    }
+  ],
+  "firstMusicalNoteTime": 2,
+  "lastMusicalNoteEnd": 175.25
+}

@@ -1,0 +1,10 @@
+__pycache__
+.pytest_cache
+.venv
+*.pyc
+*.mid
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.flac

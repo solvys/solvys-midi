@@ -1,0 +1,12 @@
+{
+  "name": "solvys-midi-omr-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "busboy": "^1.6.0"
+  }
+}

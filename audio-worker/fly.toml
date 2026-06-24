@@ -1,0 +1,39 @@
+app = "solvys-midi-audio"
+primary_region = "iad"
+
+[build]
+dockerfile = "Dockerfile"
+
+[env]
+AUDIO_TIMEOUT_SECONDS = "1800"
+AUDIO_ENGINE_MODE = "basic-pitch"
+BASIC_PITCH_MODE = "fallback"
+MKL_NUM_THREADS = "4"
+OMP_NUM_THREADS = "4"
+PORT = "8080"
+QUANTIZE_DIVISIONS = "4"
+TF_NUM_INTEROP_THREADS = "2"
+TF_NUM_INTRAOP_THREADS = "4"
+TRANSKUN_DEVICE = "cpu"
+TRANSKUN_SEGMENT_HOP_SIZE = "20"
+TRANSKUN_SEGMENT_SIZE = "20"
+
+[http_service]
+auto_start_machines = true
+auto_stop_machines = "suspend"
+force_https = true
+internal_port = 8080
+min_machines_running = 1
+processes = ["app"]
+
+[[http_service.checks]]
+grace_period = "30s"
+interval = "30s"
+method = "GET"
+path = "/health"
+timeout = "5s"
+
+[[vm]]
+cpu_kind = "shared"
+cpus = 4
+memory = "4gb"

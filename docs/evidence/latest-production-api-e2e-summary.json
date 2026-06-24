@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "elapsedSeconds": 23,
+  "deploymentUrl": "https://solvysmidi.vercel.app",
+  "jobId": "a5a5970e-9c43-43f3-ae29-6231bd13d251",
+  "title": "Reverie",
+  "artist": "Jason Fervento",
+  "durationSeconds": 176.3840909090909,
+  "noteCount": 1379,
+  "partCount": 2,
+  "engine": "Basic Pitch",
+  "arrangement": "Playable two-hand piano",
+  "midiByteLength": 10368,
+  "midiDurationSeconds": 176.3840909090909,
+  "savedSongId": "prod-e2e-1782345120430",
+  "midiDownloadUrlPresent": true,
+  "downloadedByteLength": 10368
+}

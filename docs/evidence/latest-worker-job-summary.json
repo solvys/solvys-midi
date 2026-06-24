@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "jobId": "edda6296-1555-4bcd-8a4c-c22aac56311b",
+  "elapsedSeconds": 21,
+  "engine": "Basic Pitch",
+  "quantizer": "grid",
+  "arrangement": "Playable two-hand piano",
+  "arrangementStats": {
+    "inputNotes": 1379,
+    "arrangedNotes": 1379,
+    "leftHandNotes": 728,
+    "rightHandNotes": 651,
+    "maxNotesPerSlice": 6
+  },
+  "audioDurationSeconds": 176.384,
+  "midiBase64Length": 13824,
+  "warnings": []
+}

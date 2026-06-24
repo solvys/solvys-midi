@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "elapsedSeconds": 73,
+  "jobId": "9ee10e1f-28da-468a-b5c3-ccd509b3455b",
+  "title": "Reverie",
+  "artist": "Jason Fervento",
+  "durationSeconds": 176.3840909090909,
+  "noteCount": 1379,
+  "partCount": 2,
+  "engine": "Basic Pitch",
+  "arrangement": "Playable two-hand piano",
+  "arrangementStats": {
+    "inputNotes": 1379,
+    "arrangedNotes": 1379,
+    "leftHandNotes": 728,
+    "rightHandNotes": 651,
+    "maxNotesPerSlice": 6
+  },
+  "midiByteLength": 10368,
+  "midiDurationSeconds": 176.3840909090909,
+  "tracks": [
+    {
+      "name": "Left Hand",
+      "notes": 728
+    },
+    {
+      "name": "Right Hand",
+      "notes": 651
+    },
+    {
+      "name": "Timeline",
+      "notes": 1
+    }
+  ],
+  "savedSongId": "e2e-1782344721899",
+  "midiDownloadUrlPresent": true,
+  "downloadedByteLength": 10368,
+  "sharedLibraryContainsSavedSong": true
+}

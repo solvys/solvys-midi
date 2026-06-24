@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="SolvysMIDI">
+  <rect width="512" height="512" rx="108" fill="#20274d"/>
+  <circle cx="372" cy="143" r="58" fill="#21dd70"/>
+  <path d="M138 118h182c36 0 66 29 66 66v158c0 36-30 66-66 66H138c-36 0-66-30-66-66V184c0-37 30-66 66-66Z" fill="#f7f4e9"/>
+  <path d="M138 118v290M191 118v290M244 118v290M297 118v290" stroke="#20274d" stroke-width="18"/>
+  <path d="M168 118h31v171h-31zm106 0h31v171h-31z" fill="#111319"/>
+  <path d="M340 141v162c0 37-30 66-66 66H111" fill="none" stroke="#21dd70" stroke-width="28" stroke-linecap="round"/>
+</svg>
