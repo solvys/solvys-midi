@@ -12,6 +12,10 @@
 - Verification so far: `npm audit --audit-level=high`, `npm run lint`, `npm run build`, `python3 -m py_compile audio-worker/server.py`, and `cd omr-worker && npm ci && node --check server.mjs` passed locally.
 - Local API probes verified health, legacy sync route disablement, invalid MIDI rejection, cross-origin write rejection, and app-side invalid YouTube URL rejection.
 - Local mobile browser smoke wrote `docs/evidence/latest-local-hardening-smoke.png`; the New tab accepted a YouTube URL with no file selected and no browser console errors.
+- Deployed audio worker, OMR worker, and Vercel production after setting matching worker tokens on Fly and Vercel.
+- Production hardening probes verified app health, legacy sync route disablement, invalid YouTube URL rejection before worker dispatch, invalid MIDI rejection, cross-origin write rejection, and direct worker `401` responses without bearer tokens.
+- Production E2E wrote `docs/evidence/latest-production-hardening-e2e-summary.json`: YouTube-only import completed in 71s, saved a shared song, returned no public `midiBase64`, and downloaded a 10368-byte MIDI with `MThd` header.
+- Production mobile browser smoke wrote `docs/evidence/latest-production-hardening-browser-smoke.png`; the New tab accepted a YouTube URL without requiring a file and produced no console errors.
 
 ## 2026-06-21: YouTube-to-Playable-MIDI Product Loop
 
