@@ -2,6 +2,12 @@
 
 Mobile-first Next.js PWA for turning piano score exports into MIDI files.
 
+## Open Source
+
+This repository is public and MIT licensed. Anyone can clone, download, fork, modify, and redistribute it under the terms in [`LICENSE`](./LICENSE).
+
+Please preserve the SolvysMIDI credits when reusing or forking the project. See [`CREDITS.md`](./CREDITS.md) for direct project credits and upstream open-source acknowledgments.
+
 ## What Works Locally
 
 - MusicXML, XML, and compressed MXL import
@@ -109,3 +115,7 @@ No environment variables are required for local MusicXML import. PDF import requ
 npm run lint
 npm run build
 ```
+
+## License
+
+MIT. See [`LICENSE`](./LICENSE).
