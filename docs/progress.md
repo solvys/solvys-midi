@@ -9,7 +9,9 @@
 - PWA hardening: service worker bypasses `/api/*` so health checks, shared songs, and long-running job polling are never stale-cache responses.
 - Supply-chain baseline: patched Next.js/Vercel Blob, added `postcss`/`undici` overrides, and reached `npm audit` zero vulnerabilities locally.
 - Repo hygiene: added CI, CodeQL, Dependabot, issue templates, PR template, `SECURITY.md`, `CONTRIBUTING.md`, and `docs/production-hardening.md`.
-- Verification so far: `npm run lint`, `npm run build`, and `npm audit --json` passed locally after the first hardening slice.
+- Verification so far: `npm audit --audit-level=high`, `npm run lint`, `npm run build`, `python3 -m py_compile audio-worker/server.py`, and `cd omr-worker && npm ci && node --check server.mjs` passed locally.
+- Local API probes verified health, legacy sync route disablement, invalid MIDI rejection, cross-origin write rejection, and app-side invalid YouTube URL rejection.
+- Local mobile browser smoke wrote `docs/evidence/latest-local-hardening-smoke.png`; the New tab accepted a YouTube URL with no file selected and no browser console errors.
 
 ## 2026-06-21: YouTube-to-Playable-MIDI Product Loop
 

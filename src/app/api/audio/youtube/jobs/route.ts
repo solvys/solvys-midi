@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cleanText, numericEnv, rateLimit, readJsonBody, requireSameOrigin } from "@/lib/server/guards";
-import { getYouTubeId } from "@/lib/youtube";
+import { getYouTubeId, isYouTubeUrl } from "@/lib/youtube";
 import {
   audioEngineLabel,
   audioWorkerHeaders,
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
   const body = parsed.body;
   const youtubeUrl = cleanText(body?.youtubeUrl, 500);
 
-  if (!youtubeUrl || !getYouTubeId(youtubeUrl)) {
+  if (!youtubeUrl || !isYouTubeUrl(youtubeUrl) || !getYouTubeId(youtubeUrl)) {
     return jsonError("Paste a valid YouTube link before importing audio.", 400);
   }
 

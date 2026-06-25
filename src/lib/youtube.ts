@@ -52,6 +52,16 @@ export function getYouTubeId(input: string) {
   return "";
 }
 
+export function isYouTubeUrl(input: string) {
+  try {
+    const url = new URL(input.trim());
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    return hostname === "youtu.be" || isYouTubeHost(hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function getYouTubeEmbedUrl(input: string) {
   const id = getYouTubeId(input);
   return id ? `https://www.youtube.com/embed/${id}?start=0&controls=1&modestbranding=1` : "";
