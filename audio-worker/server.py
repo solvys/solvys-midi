@@ -2,6 +2,8 @@ import base64
 import json
 import os
 import pathlib
+import re
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -39,6 +41,8 @@ JOB_STORE_DIR = os.environ.get("JOB_STORE_DIR", "").strip()
 MAX_ACTIVE_JOBS = max(1, int(os.environ.get("MAX_ACTIVE_JOBS", "2")))
 MAX_REQUEST_BYTES = max(1024, int(os.environ.get("MAX_REQUEST_BYTES", "16384")))
 REQUIRE_WORKER_TOKEN = os.environ.get("REQUIRE_WORKER_TOKEN", "0").strip() == "1"
+JOB_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{7,95}$")
+ALLOWED_EXECUTABLES = {"basic-pitch", "ffmpeg", "ffprobe", "transkun", "yt-dlp"}
 JOBS = {}
 JOBS_LOCK = threading.Lock()
 
@@ -90,22 +94,32 @@ def cleanup_jobs_locked():
         delete_job_file(job_id)
 
 
+def checked_job_id(job_id):
+    value = clean(job_id)
+    if not JOB_ID_RE.fullmatch(value):
+        raise ValueError("Invalid audio job ID.")
+    return value
+
+
 def job_store_path(job_id):
     if not JOB_STORE_DIR:
         return None
-    directory = pathlib.Path(JOB_STORE_DIR)
+    directory = pathlib.Path(JOB_STORE_DIR).expanduser().resolve()
     directory.mkdir(parents=True, exist_ok=True)
-    safe_id = "".join(character for character in job_id if character.isalnum() or character in {"-", "_"})
-    return directory / f"{safe_id}.json"
+    path = (directory / f"{checked_job_id(job_id)}.json").resolve()
+    path.relative_to(directory)
+    return path
 
 
 def persist_job(job):
     path = job_store_path(job["id"])
     if not path:
         return
-    temp_path = path.with_suffix(".json.tmp")
-    temp_path.write_text(json.dumps(job), encoding="utf-8")
-    temp_path.replace(path)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=f".{path.stem}-", suffix=".tmp", delete=False) as handle:
+        handle.write(json.dumps(job))
+        temp_path = pathlib.Path(handle.name).resolve()
+    temp_path.relative_to(path.parent)
+    os.replace(temp_path, path)
 
 
 def delete_job_file(job_id):
@@ -129,8 +143,9 @@ def load_jobs_from_store():
         for path in directory.glob("*.json"):
             try:
                 job = json.loads(path.read_text(encoding="utf-8"))
-                job_id = clean(job.get("id"))
-                if not job_id:
+                try:
+                    job_id = checked_job_id(job.get("id"))
+                except ValueError:
                     continue
                 if job.get("state") in {"queued", "running"}:
                     job["state"] = "failed"
@@ -197,10 +212,21 @@ def require_youtube_url(url):
         raise ValueError("Only YouTube links are accepted.")
 
 
-def run_command(command, cwd):
+def resolve_executable(command_name):
+    if command_name not in ALLOWED_EXECUTABLES:
+        raise ValueError("Unsupported worker executable.")
+    executable = shutil.which(command_name)
+    if not executable:
+        raise RuntimeError(f"{command_name} is not installed in the audio worker.")
+    return executable
+
+
+def run_command(command_name, arguments, cwd):
+    command = [resolve_executable(command_name), *[str(argument) for argument in arguments]]
     result = subprocess.run(
         command,
-        cwd=cwd,
+        cwd=str(pathlib.Path(cwd).resolve()),
+        shell=False,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -216,8 +242,8 @@ def run_command(command, cwd):
 def normalize_audio(audio_path, work_dir):
     output_path = pathlib.Path(work_dir) / "analysis-mono-44100.wav"
     run_command(
+        "ffmpeg",
         [
-            "ffmpeg",
             "-y",
             "-i",
             str(audio_path),
@@ -236,8 +262,8 @@ def normalize_audio(audio_path, work_dir):
 
 def probe_audio_duration(audio_path, work_dir):
     result = run_command(
+        "ffprobe",
         [
-            "ffprobe",
             "-v",
             "error",
             "-show_entries",
@@ -256,8 +282,7 @@ def probe_audio_duration(audio_path, work_dir):
 
 def download_youtube_audio(url, work_dir):
     template = str(pathlib.Path(work_dir) / "source.%(ext)s")
-    command = [
-        "yt-dlp",
+    arguments = [
         "--no-update",
         "--no-playlist",
         "--format",
@@ -278,15 +303,15 @@ def download_youtube_audio(url, work_dir):
         url,
     ]
     if YTDLP_FORCE_IPV4:
-        command.insert(1, "--force-ipv4")
+        arguments.insert(0, "--force-ipv4")
     if YTDLP_EXTRACTOR_ARGS:
-        command[1:1] = ["--extractor-args", YTDLP_EXTRACTOR_ARGS]
+        arguments[0:0] = ["--extractor-args", YTDLP_EXTRACTOR_ARGS]
     if YTDLP_JS_RUNTIME:
-        command[1:1] = ["--js-runtimes", YTDLP_JS_RUNTIME]
+        arguments[0:0] = ["--js-runtimes", YTDLP_JS_RUNTIME]
     cookies_file = os.environ.get("YTDLP_COOKIES_FILE", "").strip()
     if cookies_file:
-        command[1:1] = ["--cookies", cookies_file]
-    run_command(command, work_dir)
+        arguments[0:0] = ["--cookies", cookies_file]
+    run_command("yt-dlp", arguments, work_dir)
     wav_files = sorted(pathlib.Path(work_dir).glob("source*.wav"))
     if not wav_files:
         raise RuntimeError("yt-dlp did not produce a WAV file.")
@@ -295,12 +320,12 @@ def download_youtube_audio(url, work_dir):
 
 def run_transkun(audio_path, work_dir):
     out_path = pathlib.Path(work_dir) / "transkun.mid"
-    command = ["transkun", str(audio_path), str(out_path), "--device", TRANSKUN_DEVICE]
+    arguments = [str(audio_path), str(out_path), "--device", TRANSKUN_DEVICE]
     if TRANSKUN_SEGMENT_HOP_SIZE:
-        command.extend(["--segmentHopSize", TRANSKUN_SEGMENT_HOP_SIZE])
+        arguments.extend(["--segmentHopSize", TRANSKUN_SEGMENT_HOP_SIZE])
     if TRANSKUN_SEGMENT_SIZE:
-        command.extend(["--segmentSize", TRANSKUN_SEGMENT_SIZE])
-    run_command(command, work_dir)
+        arguments.extend(["--segmentSize", TRANSKUN_SEGMENT_SIZE])
+    run_command("transkun", arguments, work_dir)
     if not out_path.exists():
         raise RuntimeError("Transkun finished without producing MIDI.")
     return out_path
@@ -311,8 +336,7 @@ def run_basic_pitch(audio_path, work_dir):
         return None
     out_dir = pathlib.Path(work_dir) / "basic-pitch"
     out_dir.mkdir(parents=True, exist_ok=True)
-    command = ["basic-pitch", str(out_dir), str(audio_path)]
-    run_command(command, work_dir)
+    run_command("basic-pitch", [str(out_dir), str(audio_path)], work_dir)
     midi_files = sorted(out_dir.glob("*.mid"))
     return midi_files[0] if midi_files else None
 
