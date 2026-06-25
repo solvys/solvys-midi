@@ -16,6 +16,8 @@
 - Production hardening probes verified app health, legacy sync route disablement, invalid YouTube URL rejection before worker dispatch, invalid MIDI rejection, cross-origin write rejection, and direct worker `401` responses without bearer tokens.
 - Production E2E wrote `docs/evidence/latest-production-hardening-e2e-summary.json`: YouTube-only import completed in 71s, saved a shared song, returned no public `midiBase64`, and downloaded a 10368-byte MIDI with `MThd` header.
 - Production mobile browser smoke wrote `docs/evidence/latest-production-hardening-browser-smoke.png`; the New tab accepted a YouTube URL without requiring a file and produced no console errors.
+- Vercel Firewall live rules: `SolvysMIDI YouTube job starts` at 6 POSTs/hour/IP, `SolvysMIDI PDF transcriptions` at 8 POSTs/hour/IP, and `SolvysMIDI shared song writes` at 24 POSTs/hour/IP.
+- GitHub repo settings verified/enabled: public forkable repo, MIT license detected, secret scanning enabled, push protection enabled, Dependabot security updates enabled, `main` branch protection requiring CI and CodeQL checks.
 
 ## 2026-06-21: YouTube-to-Playable-MIDI Product Loop
 

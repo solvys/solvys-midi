@@ -30,11 +30,11 @@ AUDIO_ENGINE_MODE=basic-pitch
 BASIC_PITCH_MODE=fallback
 ```
 
-Add Vercel Firewall/WAF rules for:
+Live Vercel Firewall/WAF rules:
 
-- `/api/audio/youtube/jobs`: low hourly limit per IP.
-- `/api/transcribe`: low hourly limit per IP.
-- `/api/songs`: moderate hourly limit per IP.
+- `SolvysMIDI YouTube job starts`: `POST /api/audio/youtube/jobs`, 6 requests/hour/IP.
+- `SolvysMIDI PDF transcriptions`: `POST /api/transcribe`, 8 requests/hour/IP.
+- `SolvysMIDI shared song writes`: `POST /api/songs`, 24 requests/hour/IP.
 
 The in-app rate limiter is a defense-in-depth fallback. Platform WAF should be the primary public quota.
 
@@ -53,7 +53,7 @@ For stronger audio job durability, attach a Fly volume and keep `JOB_STORE_DIR=/
 
 ### GitHub
 
-Enable:
+Enabled:
 
 - secret scanning and push protection,
 - Dependabot alerts and security updates,
