@@ -23,6 +23,7 @@
 - Fresh production E2E after the cleanup wrote `docs/evidence/latest-production-hardening-e2e-summary.json`: YouTube-only import completed in 71s, saved a shared song, exposed no public `midiBase64`, and downloaded a 10368-byte MIDI with `MThd` header.
 - Fresh production browser smoke wrote `docs/evidence/latest-production-hardening-browser-smoke.json` and `docs/evidence/latest-production-hardening-browser-smoke.png`: mobile New tab accepted a YouTube link with no file selected, the submit button was visible, the body remained non-scrolling, and there were no console errors.
 - GitHub Dependabot API returned no open alerts after removing the default PyTorch dependency stack.
+- Dedicated review found 4 open CodeQL worker findings; the follow-up branch makes audio job IDs regex-checked before persistence, resolves job files under the configured store directory, writes temp job files inside that directory before atomic replace, and runs worker subprocesses through a fixed executable allow-list with `shell=False`.
 
 ## 2026-06-21: YouTube-to-Playable-MIDI Product Loop
 
