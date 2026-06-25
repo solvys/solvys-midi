@@ -16,7 +16,7 @@
   "dependencies": {
     "@tonejs/midi": "^2.0.28",
     "@vercel/blob": "^2.4.1",
-    "fast-xml-parser": "^5.8.0",
+    "fast-xml-parser": "^5.9.3",
     "jszip": "^3.10.1",
     "lucide-react": "^1.17.0",
     "next": "16.2.9",
