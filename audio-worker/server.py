@@ -18,7 +18,7 @@ import mido
 PORT = int(os.environ.get("PORT", "8080"))
 TIMEOUT_SECONDS = int(os.environ.get("AUDIO_TIMEOUT_SECONDS", "900"))
 TRANSKUN_DEVICE = os.environ.get("TRANSKUN_DEVICE", "cpu")
-AUDIO_ENGINE_MODE = os.environ.get("AUDIO_ENGINE_MODE", "transkun").lower()
+AUDIO_ENGINE_MODE = os.environ.get("AUDIO_ENGINE_MODE", "basic-pitch").strip().lower()
 BASIC_PITCH_MODE = os.environ.get("BASIC_PITCH_MODE", "fallback").lower()
 QUANTIZE_DIVISIONS = max(1, int(os.environ.get("QUANTIZE_DIVISIONS", "4")))
 YTDLP_FORMAT = os.environ.get("YTDLP_FORMAT", "bestaudio/best")
