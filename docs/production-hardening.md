@@ -12,6 +12,7 @@ This is the hardening checklist for the public SolvysMIDI deployment.
 - Service worker bypasses `/api/*` so song lists, health checks, and job polling stay live.
 - Audio and OMR workers can fail closed with `REQUIRE_WORKER_TOKEN=1`.
 - Audio worker has max active-job limits, max request size, and persisted job records.
+- The default public audio worker ships Basic Pitch only while the optional Transkun/PyTorch stack has active dependency advisories.
 - CI, CodeQL, Dependabot, issue templates, PR template, security policy, and contribution guide are present.
 
 ## Required Platform Settings
@@ -65,6 +66,7 @@ Enabled:
 - Store generated MIDI and user-uploaded score files only.
 - Do not store downloaded YouTube audio.
 - Keep YouTube preview as a YouTube embed/link, not a copied audio file.
+- Keep Transkun as a deliberate self-hosted variant until its required PyTorch stack has no active unresolved advisories.
 - Tell users they must have rights to transcribe, arrange, store, and download generated output.
 - Honor takedown/delete requests for stored MIDI or scores.
 

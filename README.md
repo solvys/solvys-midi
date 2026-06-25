@@ -75,7 +75,7 @@ The audio worker is free/open-source:
 
 - `yt-dlp` fetches the source audio from the user-provided YouTube link.
 - `Basic Pitch` is the production default audio-to-MIDI engine because it gives usable latency on the deployed worker.
-- `Transkun` remains available as a high-accuracy mode by setting `AUDIO_ENGINE_MODE=transkun`.
+- `Transkun` remains supported by the worker code path, but it is not installed in the default public worker image while the required PyTorch stack has active advisories. Self-hosters can build a Transkun-specific image knowingly when that tradeoff is acceptable.
 - A MIDI grid quantizer snaps the returned transcription to cleaner note starts and durations.
 - A deterministic arranger thins dense note clusters, splits left/right hands, and exports a playable two-track piano MIDI.
 - A low-velocity internal `Timeline` marker preserves the source audio duration in the downloadable MIDI while the app ignores that marker for note counts and previews.

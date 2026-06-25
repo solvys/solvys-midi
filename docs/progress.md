@@ -18,6 +18,7 @@
 - Production mobile browser smoke wrote `docs/evidence/latest-production-hardening-browser-smoke.png`; the New tab accepted a YouTube URL without requiring a file and produced no console errors.
 - Vercel Firewall live rules: `SolvysMIDI YouTube job starts` at 6 POSTs/hour/IP, `SolvysMIDI PDF transcriptions` at 8 POSTs/hour/IP, and `SolvysMIDI shared song writes` at 24 POSTs/hour/IP.
 - GitHub repo settings verified/enabled: public forkable repo, MIT license detected, secret scanning enabled, push protection enabled, Dependabot security updates enabled, `main` branch protection requiring CI and CodeQL checks.
+- Dependabot surfaced PyTorch advisories from the optional Transkun stack; the default public audio worker now ships Basic Pitch only and leaves Transkun as a deliberate self-hosted variant until the PyTorch advisory surface is clean.
 
 ## 2026-06-21: YouTube-to-Playable-MIDI Product Loop
 
