@@ -35,6 +35,10 @@ ARRANGE_HAND_SPLIT = int(os.environ.get("ARRANGE_HAND_SPLIT_MIDI", "60"))
 PIANO_LOW = 21
 PIANO_HIGH = 108
 JOB_TTL_SECONDS = int(os.environ.get("JOB_TTL_SECONDS", "7200"))
+JOB_STORE_DIR = os.environ.get("JOB_STORE_DIR", "").strip()
+MAX_ACTIVE_JOBS = max(1, int(os.environ.get("MAX_ACTIVE_JOBS", "2")))
+MAX_REQUEST_BYTES = max(1024, int(os.environ.get("MAX_REQUEST_BYTES", "16384")))
+REQUIRE_WORKER_TOKEN = os.environ.get("REQUIRE_WORKER_TOKEN", "0").strip() == "1"
 JOBS = {}
 JOBS_LOCK = threading.Lock()
 
@@ -51,7 +55,7 @@ def send_json(handler, status, payload):
 def bearer_authorized(headers):
     token = os.environ.get("AUDIO_TRANSCRIPTION_WORKER_TOKEN", "").strip()
     if not token:
-        return True
+        return not REQUIRE_WORKER_TOKEN
     return headers.get("authorization") == f"Bearer {token}"
 
 
@@ -83,6 +87,68 @@ def cleanup_jobs_locked():
     ]
     for job_id in stale_ids:
         JOBS.pop(job_id, None)
+        delete_job_file(job_id)
+
+
+def job_store_path(job_id):
+    if not JOB_STORE_DIR:
+        return None
+    directory = pathlib.Path(JOB_STORE_DIR)
+    directory.mkdir(parents=True, exist_ok=True)
+    safe_id = "".join(character for character in job_id if character.isalnum() or character in {"-", "_"})
+    return directory / f"{safe_id}.json"
+
+
+def persist_job(job):
+    path = job_store_path(job["id"])
+    if not path:
+        return
+    temp_path = path.with_suffix(".json.tmp")
+    temp_path.write_text(json.dumps(job), encoding="utf-8")
+    temp_path.replace(path)
+
+
+def delete_job_file(job_id):
+    path = job_store_path(job_id)
+    if not path:
+        return
+    try:
+        path.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+def load_jobs_from_store():
+    if not JOB_STORE_DIR:
+        return
+    directory = pathlib.Path(JOB_STORE_DIR)
+    if not directory.exists():
+        return
+    loaded = 0
+    with JOBS_LOCK:
+        for path in directory.glob("*.json"):
+            try:
+                job = json.loads(path.read_text(encoding="utf-8"))
+                job_id = clean(job.get("id"))
+                if not job_id:
+                    continue
+                if job.get("state") in {"queued", "running"}:
+                    job["state"] = "failed"
+                    job["status"] = "Worker restarted"
+                    job["error"] = "The audio worker restarted before this transcription finished. Please start a new transcription."
+                    job["updatedAt"] = job_time()
+                    persist_job(job)
+                JOBS[job_id] = job
+                loaded += 1
+            except Exception as error:
+                print(f"Could not load job record {path}: {error}", flush=True)
+        cleanup_jobs_locked()
+    if loaded:
+        print(f"Loaded {loaded} persisted audio jobs", flush=True)
+
+
+def active_jobs_locked():
+    return sum(1 for job in JOBS.values() if job.get("state") in {"queued", "running"})
 
 
 def public_job(job):
@@ -108,6 +174,7 @@ def update_job(job_id, **updates):
             return
         job.update(updates)
         job["updatedAt"] = job_time()
+        persist_job(job)
 
 
 def run_job(job_id, payload):
@@ -653,6 +720,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > MAX_REQUEST_BYTES:
+                send_json(self, 413, {"error": "Audio worker request payload is too large."})
+                return
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
 
             if parsed.path == "/jobs":
@@ -669,7 +739,11 @@ class Handler(BaseHTTPRequestHandler):
                 }
                 with JOBS_LOCK:
                     cleanup_jobs_locked()
+                    if active_jobs_locked() >= MAX_ACTIVE_JOBS:
+                        send_json(self, 429, {"error": "The audio worker is busy. Please try again shortly."})
+                        return
                     JOBS[job_id] = job
+                    persist_job(job)
                 thread = threading.Thread(target=run_job, args=(job_id, payload), daemon=True)
                 thread.start()
                 send_json(self, 202, public_job(job))
@@ -686,6 +760,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    load_jobs_from_store()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     server.daemon_threads = True
     print(f"SolvysMIDI audio worker listening on {PORT}", flush=True)

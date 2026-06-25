@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
+import { numericEnv, rateLimit, rejectLargeContentLength, requireSameOrigin } from "@/lib/server/guards";
 import {
   convertMusicXmlToMidi,
   readMusicXmlFromMxlBytes,
@@ -9,6 +10,9 @@ import {
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
+
+const PDF_UPLOAD_MAX_BYTES = numericEnv("PDF_UPLOAD_MAX_BYTES", 80 * 1024 * 1024);
+const PDF_TRANSCRIBES_PER_HOUR = numericEnv("PDF_TRANSCRIBES_PER_HOUR", 8);
 
 type OmrJsonResponse = {
   musicXml?: string;
@@ -148,6 +152,25 @@ function transcriptionPayloadFromMusicXml(
 }
 
 export async function POST(request: NextRequest) {
+  const originRejection = requireSameOrigin(request);
+  if (originRejection) {
+    return originRejection;
+  }
+
+  const rateLimitRejection = rateLimit(request, {
+    key: "pdf:transcribe",
+    max: PDF_TRANSCRIBES_PER_HOUR,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (rateLimitRejection) {
+    return rateLimitRejection;
+  }
+
+  const sizeRejection = rejectLargeContentLength(request, PDF_UPLOAD_MAX_BYTES);
+  if (sizeRejection) {
+    return sizeRejection;
+  }
+
   const workerUrl = configuredWorkerUrl();
 
   if (!workerUrl) {

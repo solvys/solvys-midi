@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { midiBytesToTranscriptionPayload } from "@/lib/midi-summary";
+import { cleanText } from "@/lib/server/guards";
 import { getYouTubeId } from "@/lib/youtube";
 
 export type ImportRequest = {
@@ -59,6 +60,10 @@ export function audioWorkerUrl() {
   return process.env.AUDIO_TRANSCRIPTION_WORKER_URL?.trim().replace(/\/$/, "") ?? "";
 }
 
+export function audioEngineLabel() {
+  return process.env.AUDIO_ENGINE_MODE?.trim().toLowerCase() === "transkun" ? "Transkun" : "Basic Pitch";
+}
+
 export function audioWorkerHeaders() {
   const headers: HeadersInit = {
     "Content-Type": "application/json",
@@ -95,21 +100,21 @@ export async function transcriptionPayloadFromWorkerResult(
   result: AudioWorkerResponse,
   request: ImportRequest,
 ) {
-  const youtubeUrl = clean(request.youtubeUrl);
+  const youtubeUrl = cleanText(request.youtubeUrl, 500);
   const metadata = await youtubeMetadata(youtubeUrl);
-  const title = clean(request.title) || metadata.title || `YouTube ${getYouTubeId(youtubeUrl)}`;
+  const title = cleanText(request.title, 160) || metadata.title || `YouTube ${getYouTubeId(youtubeUrl)}`;
 
   const payload = midiBytesToTranscriptionPayload(Buffer.from(result.midiBase64 || "", "base64"), {
     title,
-    artist: clean(request.artist) || metadata.artist || "YouTube",
-    year: clean(request.year),
-    genre: clean(request.genre) || "Classical",
-    subGenre: clean(request.subGenre) || "Piano Solo",
+    artist: cleanText(request.artist, 160) || metadata.artist || "YouTube",
+    year: cleanText(request.year, 20),
+    genre: cleanText(request.genre, 80) || "Classical",
+    subGenre: cleanText(request.subGenre, 120) || "Piano Solo",
   });
 
   return {
     ...payload,
-    engine: result.engine || "Transkun",
+    engine: result.engine || audioEngineLabel(),
     quantizer: result.quantizer || "grid",
     arrangement: result.arrangement || "Playable two-hand piano",
     arrangementStats: result.arrangementStats,

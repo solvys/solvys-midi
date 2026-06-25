@@ -57,7 +57,7 @@ type SongEntry = {
   sourceFile: string;
   youtubeUrl: string;
   youtubeId: string;
-  midiBase64: string;
+  midiBase64?: string;
   midiFilename: string;
   midiUrl?: string;
   midiDownloadUrl?: string;
@@ -156,11 +156,18 @@ function loadHistory() {
       ? stored
           .filter(
             (song) =>
-              Boolean(song.sourceFile && song.midiBase64 && String(song.status) !== "sample") &&
+              Boolean(
+                song.sourceFile &&
+                  (song.midiBase64 || song.midiUrl || song.midiDownloadUrl) &&
+                  String(song.status) !== "sample",
+              ) &&
               !deletedSongIds.has(song.id),
           )
           .map((song) => ({
             ...song,
+            midiBase64: song.midiBase64 ?? "",
+            midiUrl: song.midiUrl ?? "",
+            midiDownloadUrl: song.midiDownloadUrl ?? "",
             status: (song.status === "saved" ? "saved" : "ready") as SongStatus,
             previewNotes: song.previewNotes ?? [],
             waveform: song.waveform ?? [],
@@ -214,6 +221,9 @@ function mergeSongs(primary: SongEntry[], secondary: SongEntry[]) {
 
     byId.set(song.id, {
       ...song,
+      midiBase64: song.midiBase64 ?? "",
+      midiUrl: song.midiUrl ?? "",
+      midiDownloadUrl: song.midiDownloadUrl ?? "",
       status: (song.status === "saved" ? "saved" : "ready") as SongStatus,
       previewNotes: song.previewNotes ?? [],
       waveform: song.waveform ?? [],
@@ -845,6 +855,23 @@ export function SolvysMidiApp() {
     throw new Error("No stored sheet music is available for this song.");
   }
 
+  async function midiBlob(song: SongEntry) {
+    if (song.midiBase64) {
+      return base64ToBlob(song.midiBase64);
+    }
+
+    const midiUrl = song.midiDownloadUrl || song.midiUrl;
+    if (midiUrl) {
+      const response = await fetch(midiUrl, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("Stored MIDI could not be downloaded.");
+      }
+      return response.blob();
+    }
+
+    throw new Error("No stored MIDI is available for this song.");
+  }
+
   async function exportSong(song: SongEntry, kind: ExportKind = "midi") {
     setExportMenuOpenFor("");
 
@@ -859,18 +886,17 @@ export function SolvysMidiApp() {
       return;
     }
 
-    if (!song.midiBase64) {
-      setStatus("Convert a score before exporting");
-      return;
-    }
+    try {
+      const blob = await midiBlob(song);
+      const filename = song.midiFilename || safeMidiFilename(song.title);
 
-    const blob = base64ToBlob(song.midiBase64);
-    const filename = song.midiFilename || safeMidiFilename(song.title);
-
-    if (await exportBlob(blob, filename, `Export ${song.title}`)) {
-      setSongs((current) =>
-        current.map((item) => (item.id === song.id ? { ...item, status: "saved" } : item)),
-      );
+      if (await exportBlob(blob, filename, `Export ${song.title}`)) {
+        setSongs((current) =>
+          current.map((item) => (item.id === song.id ? { ...item, status: "saved" } : item)),
+        );
+      }
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "MIDI export failed");
     }
   }
 

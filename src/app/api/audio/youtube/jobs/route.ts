@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cleanText, numericEnv, rateLimit, readJsonBody, requireSameOrigin } from "@/lib/server/guards";
 import { getYouTubeId } from "@/lib/youtube";
 import {
+  audioEngineLabel,
   audioWorkerHeaders,
   audioWorkerUrl,
-  clean,
   jsonError,
   workerErrorMessage,
   type AudioWorkerJobResponse,
@@ -14,9 +15,31 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+const AUDIO_JOB_STARTS_PER_HOUR = numericEnv("AUDIO_JOB_STARTS_PER_HOUR", 6);
+const AUDIO_JOB_REQUEST_MAX_BYTES = numericEnv("AUDIO_JOB_REQUEST_MAX_BYTES", 8 * 1024);
+
 export async function POST(request: NextRequest) {
-  const body = (await request.json().catch(() => null)) as ImportRequest | null;
-  const youtubeUrl = clean(body?.youtubeUrl);
+  const originRejection = requireSameOrigin(request);
+  if (originRejection) {
+    return originRejection;
+  }
+
+  const rateLimitRejection = rateLimit(request, {
+    key: "audio-jobs:start",
+    max: AUDIO_JOB_STARTS_PER_HOUR,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (rateLimitRejection) {
+    return rateLimitRejection;
+  }
+
+  const parsed = await readJsonBody<ImportRequest | null>(request, AUDIO_JOB_REQUEST_MAX_BYTES);
+  if (parsed.error) {
+    return parsed.error;
+  }
+
+  const body = parsed.body;
+  const youtubeUrl = cleanText(body?.youtubeUrl, 500);
 
   if (!youtubeUrl || !getYouTubeId(youtubeUrl)) {
     return jsonError("Paste a valid YouTube link before importing audio.", 400);
@@ -28,7 +51,7 @@ export async function POST(request: NextRequest) {
       "Open-source audio transcription is not configured. Deploy audio-worker/ and set AUDIO_TRANSCRIPTION_WORKER_URL.",
       503,
       {
-        engine: "Transkun",
+        engine: audioEngineLabel(),
         quantizer: "Basic Pitch-assisted grid",
       },
     );
@@ -36,11 +59,11 @@ export async function POST(request: NextRequest) {
 
   const requestBody: ImportRequest = {
     youtubeUrl,
-    title: clean(body?.title),
-    artist: clean(body?.artist),
-    year: clean(body?.year),
-    genre: clean(body?.genre),
-    subGenre: clean(body?.subGenre),
+    title: cleanText(body?.title, 160),
+    artist: cleanText(body?.artist, 160),
+    year: cleanText(body?.year, 20),
+    genre: cleanText(body?.genre, 80),
+    subGenre: cleanText(body?.subGenre, 120),
   };
 
   try {
@@ -58,7 +81,7 @@ export async function POST(request: NextRequest) {
         response.status,
         {
           workerError: payload.error,
-          engine: "Transkun",
+          engine: audioEngineLabel(),
           quantizer: "grid",
         },
       );
@@ -67,7 +90,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(payload, { status: 202 });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Open-source audio job start failed.", 502, {
-      engine: "Transkun",
+      engine: audioEngineLabel(),
     });
   }
 }

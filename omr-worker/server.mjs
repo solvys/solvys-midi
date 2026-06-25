@@ -11,6 +11,7 @@ const PORT = Number(process.env.PORT || 8080);
 const AUDIVERIS_BIN = process.env.AUDIVERIS_BIN || "audiveris";
 const MAX_BYTES = Number(process.env.MAX_UPLOAD_BYTES || 40 * 1024 * 1024);
 const TIMEOUT_MS = Number(process.env.OMR_TIMEOUT_MS || 240_000);
+const REQUIRE_WORKER_TOKEN = process.env.REQUIRE_WORKER_TOKEN === "1";
 
 function sendJson(response, status, payload) {
   response.writeHead(status, { "Content-Type": "application/json" });
@@ -20,7 +21,7 @@ function sendJson(response, status, payload) {
 function bearerAuthorized(request) {
   const token = process.env.OMR_WORKER_TOKEN?.trim();
   if (!token) {
-    return true;
+    return !REQUIRE_WORKER_TOKEN;
   }
 
   return request.headers.authorization === `Bearer ${token}`;
@@ -133,6 +134,12 @@ async function receivePdf(request, workDir) {
 async function handleTranscribe(request, response) {
   if (!bearerAuthorized(request)) {
     sendJson(response, 401, { error: "Unauthorized OMR worker request." });
+    return;
+  }
+
+  const contentLength = Number(request.headers["content-length"] || 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_BYTES) {
+    sendJson(response, 413, { error: "PDF upload is too large." });
     return;
   }
 

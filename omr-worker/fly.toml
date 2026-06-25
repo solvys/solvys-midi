@@ -8,6 +8,7 @@ dockerfile = "Dockerfile"
 MAX_UPLOAD_BYTES = "83886080"
 OMR_TIMEOUT_MS = "300000"
 PORT = "8080"
+REQUIRE_WORKER_TOKEN = "1"
 
 [http_service]
 auto_start_machines = true

@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { list, put } from "@vercel/blob";
 import { randomUUID } from "node:crypto";
-import { base64ToBlob, safeMidiFilename } from "@/lib/musicxml";
+import { safeMidiFilename } from "@/lib/musicxml";
+import {
+  cleanText,
+  decodeBase64Payload,
+  isMidiBytes,
+  jsonError,
+  numericEnv,
+  rateLimit,
+  readJsonBody,
+  requireSameOrigin,
+} from "@/lib/server/guards";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,13 +56,18 @@ type PublicSongEntry = {
   status?: string;
 };
 
-function jsonError(error: string, status: number) {
-  return NextResponse.json({ error }, { status });
-}
+const SONG_POST_MAX_BYTES = numericEnv("SONG_POST_MAX_BYTES", 30 * 1024 * 1024);
+const MIDI_MAX_BYTES = numericEnv("MIDI_MAX_BYTES", 10 * 1024 * 1024);
+const SCORE_MAX_BYTES = numericEnv("SCORE_MAX_BYTES", 20 * 1024 * 1024);
+const SONG_POSTS_PER_HOUR = numericEnv("SONG_POSTS_PER_HOUR", 24);
 
-function clean(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
+const SCORE_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/vnd.recordare.musicxml",
+  "application/vnd.recordare.musicxml+xml",
+  "application/xml",
+  "text/xml",
+]);
 
 function songPath(id: string) {
   return `library/songs/${id}.json`;
@@ -69,6 +84,15 @@ function scorePath(id: string, filename: string) {
     .replace(/\s+/g, "-")
     .toLowerCase();
   return `library/scores/${id}-${cleaned || "score.pdf"}`;
+}
+
+function safeStorageId(value: unknown) {
+  const cleaned = cleanText(value, 120).replace(/[^\w-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return cleaned || randomUUID();
+}
+
+function publicArray<T>(value: unknown, max: number) {
+  return Array.isArray(value) ? (value.slice(0, max) as T[]) : undefined;
 }
 
 async function readJsonBlob(url: string) {
@@ -89,37 +113,69 @@ export async function GET() {
 
   const result = await list({ prefix: "library/songs/", limit: 100 });
   const songs = (await Promise.all(result.blobs.map((blob) => readJsonBlob(blob.url))))
-    .filter((song): song is PublicSongEntry => Boolean(song?.id && song?.midiBase64))
+    .filter((song): song is PublicSongEntry => Boolean(song?.id && (song?.midiUrl || song?.midiDownloadUrl || song?.midiBase64)))
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
   return NextResponse.json({ songs });
 }
 
 export async function POST(request: NextRequest) {
+  const originRejection = requireSameOrigin(request);
+  if (originRejection) {
+    return originRejection;
+  }
+
+  const rateLimitRejection = rateLimit(request, {
+    key: "songs:post",
+    max: SONG_POSTS_PER_HOUR,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (rateLimitRejection) {
+    return rateLimitRejection;
+  }
+
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return jsonError("Shared song storage is not configured.", 503);
   }
 
-  const incoming = (await request.json().catch(() => null)) as PublicSongEntry | null;
-  if (!incoming?.midiBase64) {
-    return jsonError("A MIDI payload is required.", 400);
+  const parsed = await readJsonBody<PublicSongEntry | null>(request, SONG_POST_MAX_BYTES);
+  if (parsed.error) {
+    return parsed.error;
   }
 
-  const id = clean(incoming.id) || randomUUID();
-  const title = clean(incoming.title) || "Untitled";
-  const midiFilename = clean(incoming.midiFilename) || safeMidiFilename(title);
-  const midiBlob = base64ToBlob(incoming.midiBase64);
+  const incoming = parsed.body;
+  const midiPayload = decodeBase64Payload(incoming?.midiBase64, MIDI_MAX_BYTES, "MIDI payload");
+  if ("error" in midiPayload) {
+    return jsonError(midiPayload.error, midiPayload.maxBytes ? 413 : 400, { maxBytes: midiPayload.maxBytes });
+  }
+
+  if (!isMidiBytes(midiPayload.bytes)) {
+    return jsonError("MIDI payload is not a valid MIDI file.", 400);
+  }
+
+  const id = safeStorageId(incoming?.id);
+  const title = cleanText(incoming?.title, 160) || "Untitled";
+  const midiFilename = cleanText(incoming?.midiFilename, 180) || safeMidiFilename(title);
+  const midiBlob = new Blob([new Uint8Array(midiPayload.bytes)], { type: "audio/midi" });
   const storedMidi = await put(midiPath(id, midiFilename), midiBlob, {
     access: "public",
     allowOverwrite: true,
     contentType: "audio/midi",
     cacheControlMaxAge: 60,
   });
-  const scoreBase64 = clean(incoming.scoreBase64);
-  const scoreFilename = clean(incoming.scoreFilename) || clean(incoming.sourceFile) || `${title}.pdf`;
-  const scoreMimeType = clean(incoming.scoreMimeType) || "application/pdf";
+  const scoreBase64 = cleanText(incoming?.scoreBase64, Number.MAX_SAFE_INTEGER);
+  const scoreFilename = cleanText(incoming?.scoreFilename, 180) || cleanText(incoming?.sourceFile, 180) || `${title}.pdf`;
+  const requestedScoreMimeType = cleanText(incoming?.scoreMimeType, 120) || "application/pdf";
+  const scoreMimeType = SCORE_MIME_TYPES.has(requestedScoreMimeType) ? requestedScoreMimeType : "application/octet-stream";
+  const scorePayload = scoreBase64
+    ? decodeBase64Payload(scoreBase64, SCORE_MAX_BYTES, "Score payload")
+    : null;
+  if (scorePayload && "error" in scorePayload) {
+    return jsonError(scorePayload.error, scorePayload.maxBytes ? 413 : 400, { maxBytes: scorePayload.maxBytes });
+  }
+
   const storedScore = scoreBase64
-    ? await put(scorePath(id, scoreFilename), base64ToBlob(scoreBase64, scoreMimeType), {
+    ? await put(scorePath(id, scoreFilename), new Blob([new Uint8Array(scorePayload!.bytes)], { type: scoreMimeType }), {
         access: "public",
         allowOverwrite: true,
         contentType: scoreMimeType,
@@ -128,23 +184,37 @@ export async function POST(request: NextRequest) {
     : null;
 
   const song: PublicSongEntry = {
-    ...incoming,
     id,
     title,
-    artist: clean(incoming.artist) || "Unknown composer",
-    year: clean(incoming.year) || new Date().getFullYear().toString(),
-    genre: clean(incoming.genre) || "Classical",
-    subGenre: clean(incoming.subGenre) || "Piano Solo",
-    createdAt: clean(incoming.createdAt) || new Date().toISOString(),
+    artist: cleanText(incoming?.artist, 160) || "Unknown composer",
+    year: cleanText(incoming?.year, 20) || new Date().getFullYear().toString(),
+    genre: cleanText(incoming?.genre, 80) || "Classical",
+    subGenre: cleanText(incoming?.subGenre, 120) || "Piano Solo",
+    createdAt: cleanText(incoming?.createdAt, 40) || new Date().toISOString(),
+    sourceFile: cleanText(incoming?.sourceFile, 180),
+    youtubeUrl: cleanText(incoming?.youtubeUrl, 500),
+    youtubeId: cleanText(incoming?.youtubeId, 80),
     midiFilename,
+    midiBase64: undefined,
     midiUrl: storedMidi.url,
     midiDownloadUrl: storedMidi.downloadUrl,
     scoreBase64: undefined,
     scoreFilename,
     scoreMimeType,
-    scoreUrl: storedScore?.url || incoming.scoreUrl,
-    scoreDownloadUrl: storedScore?.downloadUrl || incoming.scoreDownloadUrl,
-    status: incoming.status === "saved" ? "saved" : "ready",
+    scoreUrl: storedScore?.url || cleanText(incoming?.scoreUrl, 800),
+    scoreDownloadUrl: storedScore?.downloadUrl || cleanText(incoming?.scoreDownloadUrl, 800),
+    durationSeconds: Number(incoming?.durationSeconds) || 0,
+    noteCount: Number(incoming?.noteCount) || 0,
+    partCount: Number(incoming?.partCount) || 0,
+    previewNotes: publicArray(incoming?.previewNotes, 720),
+    waveform: publicArray(incoming?.waveform, 96),
+    musicXml: undefined,
+    engine: cleanText(incoming?.engine, 120),
+    quantizer: cleanText(incoming?.quantizer, 120),
+    arrangement: cleanText(incoming?.arrangement, 160),
+    arrangementStats: incoming?.arrangementStats,
+    warnings: publicArray<string>(incoming?.warnings, 10),
+    status: incoming?.status === "saved" ? "saved" : "ready",
   };
 
   await put(songPath(id), JSON.stringify(song), {
