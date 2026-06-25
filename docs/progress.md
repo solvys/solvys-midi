@@ -19,6 +19,10 @@
 - Vercel Firewall live rules: `SolvysMIDI YouTube job starts` at 6 POSTs/hour/IP, `SolvysMIDI PDF transcriptions` at 8 POSTs/hour/IP, and `SolvysMIDI shared song writes` at 24 POSTs/hour/IP.
 - GitHub repo settings verified/enabled: public forkable repo, MIT license detected, secret scanning enabled, push protection enabled, Dependabot security updates enabled, `main` branch protection requiring CI and CodeQL checks.
 - Dependabot surfaced PyTorch advisories from the optional Transkun stack; the default public audio worker now ships Basic Pitch only and leaves Transkun as a deliberate self-hosted variant until the PyTorch advisory surface is clean.
+- Final dependency cleanup redeployed `solvys-midi-audio` without PyTorch/Transkun and redeployed Vercel production, then explicitly aliased the fresh deployment to `https://solvysmidi.vercel.app`.
+- Fresh production E2E after the cleanup wrote `docs/evidence/latest-production-hardening-e2e-summary.json`: YouTube-only import completed in 71s, saved a shared song, exposed no public `midiBase64`, and downloaded a 10368-byte MIDI with `MThd` header.
+- Fresh production browser smoke wrote `docs/evidence/latest-production-hardening-browser-smoke.json` and `docs/evidence/latest-production-hardening-browser-smoke.png`: mobile New tab accepted a YouTube link with no file selected, the submit button was visible, the body remained non-scrolling, and there were no console errors.
+- GitHub Dependabot API returned no open alerts after removing the default PyTorch dependency stack.
 
 ## 2026-06-21: YouTube-to-Playable-MIDI Product Loop
 
