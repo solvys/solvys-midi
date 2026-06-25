@@ -8,6 +8,8 @@ This repository is public and MIT licensed. Anyone can clone, download, fork, mo
 
 Please preserve the SolvysMIDI credits when reusing or forking the project. See [`CREDITS.md`](./CREDITS.md) for direct project credits and upstream open-source acknowledgments.
 
+Security, contribution, and production hardening notes live in [`SECURITY.md`](./SECURITY.md), [`CONTRIBUTING.md`](./CONTRIBUTING.md), and [`docs/production-hardening.md`](./docs/production-hardening.md).
+
 ## What Works Locally
 
 - MusicXML, XML, and compressed MXL import
@@ -40,7 +42,7 @@ Then point the PWA at it:
 
 ```bash
 OMR_WORKER_URL=https://your-worker-host
-OMR_WORKER_TOKEN=optional-shared-secret
+OMR_WORKER_TOKEN=shared-secret
 ```
 
 Worker contract:
@@ -62,6 +64,8 @@ Audiveris handles printed common Western music notation. Handwritten scores and 
 - Vercel production env: `AUDIO_TRANSCRIPTION_WORKER_URL=https://solvys-midi-audio.fly.dev`
 
 The worker is deployed from `omr-worker/fly.toml` with one auto-suspending Fly machine and no minimum machines running.
+
+Production workers are configured to fail closed with `REQUIRE_WORKER_TOKEN=1`. Set matching worker secrets on Fly and Vercel before deploying token-required worker configs.
 
 ## Open-Source YouTube Audio Import
 
@@ -90,11 +94,13 @@ Then point the PWA at it:
 
 ```bash
 AUDIO_TRANSCRIPTION_WORKER_URL=https://your-audio-worker-host
-AUDIO_TRANSCRIPTION_WORKER_TOKEN=optional-shared-secret
+AUDIO_TRANSCRIPTION_WORKER_TOKEN=shared-secret
 AUDIO_ENGINE_MODE=basic-pitch
 BASIC_PITCH_MODE=fallback
 YTDLP_COOKIES_FILE=optional-worker-local-cookie-file
 ```
+
+The app stores generated MIDI and uploaded score files. It should not store downloaded YouTube source audio. Users are responsible for having the rights needed to transcribe, arrange, store, and download generated output.
 
 ## Development
 
@@ -112,8 +118,11 @@ No environment variables are required for local MusicXML import. PDF import requ
 ## Checks
 
 ```bash
+npm audit --audit-level=high
 npm run lint
 npm run build
+python3 -m py_compile audio-worker/server.py
+cd omr-worker && npm ci && node --check server.mjs
 ```
 
 ## License

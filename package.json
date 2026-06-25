@@ -15,11 +15,11 @@
   },
   "dependencies": {
     "@tonejs/midi": "^2.0.28",
-    "@vercel/blob": "^2.4.0",
+    "@vercel/blob": "^2.4.1",
     "fast-xml-parser": "^5.8.0",
     "jszip": "^3.10.1",
     "lucide-react": "^1.17.0",
-    "next": "16.2.7",
+    "next": "16.2.9",
     "opensheetmusicdisplay": "^1.9.9",
     "react": "19.2.4",
     "react-dom": "19.2.4"
@@ -31,8 +31,12 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.7",
+    "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": "8.5.15",
+    "undici": "6.27.0"
   }
 }

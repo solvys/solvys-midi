@@ -1,5 +1,16 @@
 # SolvysMIDI Progress
 
+## 2026-06-25: Public Hardening Sprint
+
+- Goal: harden SolvysMIDI as a public, forkable, compute-backed PWA without changing the core mobile product loop.
+- App API hardening: added same-origin write checks, body-size caps, coarse per-IP rate limits, MIDI header validation, and stricter public song metadata.
+- Storage hardening: shared song JSON no longer embeds MIDI or score base64; stored Blob URLs are the source of truth for shared downloads.
+- Worker hardening: production worker configs now require bearer-token mode, audio jobs have active-job/request-size limits, and audio job records persist to `JOB_STORE_DIR`.
+- PWA hardening: service worker bypasses `/api/*` so health checks, shared songs, and long-running job polling are never stale-cache responses.
+- Supply-chain baseline: patched Next.js/Vercel Blob, added `postcss`/`undici` overrides, and reached `npm audit` zero vulnerabilities locally.
+- Repo hygiene: added CI, CodeQL, Dependabot, issue templates, PR template, `SECURITY.md`, `CONTRIBUTING.md`, and `docs/production-hardening.md`.
+- Verification so far: `npm run lint`, `npm run build`, and `npm audit --json` passed locally after the first hardening slice.
+
 ## 2026-06-21: YouTube-to-Playable-MIDI Product Loop
 
 - Goal: paste a YouTube link in the PWA, transcribe audio with free/open-source tooling, arrange the result into a playable piano MIDI, store it in the shared library, and make it downloadable from the app.

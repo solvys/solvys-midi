@@ -1,0 +1,37 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+    open-pull-requests-limit: 5
+    groups:
+      app-runtime:
+        patterns:
+          - next
+          - react
+          - react-dom
+          - "@vercel/*"
+      app-tooling:
+        patterns:
+          - eslint*
+          - typescript
+          - "@types/*"
+
+  - package-ecosystem: npm
+    directory: /omr-worker
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:30"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "10:00"
+    open-pull-requests-limit: 5
