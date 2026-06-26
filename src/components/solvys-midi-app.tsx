@@ -102,6 +102,17 @@ type AudioJobPayload = {
   workerError?: string;
 };
 
+type ConversionFlow = "youtube" | "pdf" | "score";
+type ConversionStepState = "pending" | "active" | "complete" | "error";
+
+type ConversionStep = {
+  id: string;
+  label: string;
+  detail: string;
+  percent: number;
+  state: ConversionStepState;
+};
+
 const HISTORY_KEY = "solvys-midi-history-v1";
 const SETTINGS_KEY = "solvys-midi-settings-v1";
 const DELETED_SONGS_KEY = "solvys-midi-deleted-song-ids-v1";
@@ -118,6 +129,32 @@ const DEFAULT_HEALTH: HealthState = {
   api: "checking",
   audio: "checking",
   backend: "checking",
+};
+
+const CONVERSION_STEPS: Record<ConversionFlow, Array<Omit<ConversionStep, "state" | "detail">>> = {
+  youtube: [
+    { id: "queue", label: "Queue import", percent: 8 },
+    { id: "download", label: "Download YouTube audio", percent: 24 },
+    { id: "transcribe", label: "Transcribe audio", percent: 62 },
+    { id: "arrange", label: "Arrange piano MIDI", percent: 82 },
+    { id: "store", label: "Store result", percent: 94 },
+    { id: "metadata", label: "Fill song info", percent: 100 },
+  ],
+  pdf: [
+    { id: "read", label: "Read score file", percent: 14 },
+    { id: "upload", label: "Upload PDF", percent: 34 },
+    { id: "transcribe", label: "Transcribe sheet music", percent: 68 },
+    { id: "write", label: "Write MIDI", percent: 84 },
+    { id: "store", label: "Store result", percent: 94 },
+    { id: "metadata", label: "Fill song info", percent: 100 },
+  ],
+  score: [
+    { id: "read", label: "Read score file", percent: 18 },
+    { id: "parse", label: "Parse notation", percent: 52 },
+    { id: "write", label: "Write MIDI", percent: 82 },
+    { id: "store", label: "Store result", percent: 94 },
+    { id: "metadata", label: "Fill song info", percent: 100 },
+  ],
 };
 
 function loadSettings() {
@@ -355,6 +392,45 @@ function FooterStatus({ label, status }: { label: string; status: ServiceStatus 
   );
 }
 
+function ConversionProgressPanel({
+  steps,
+  visible,
+}: {
+  steps: ConversionStep[];
+  visible: boolean;
+}) {
+  if (!steps.length) {
+    return null;
+  }
+
+  const percent = Math.max(0, Math.min(100, Math.max(...steps.map((step) => step.state === "pending" ? 0 : step.percent))));
+
+  return (
+    <section className={visible ? "conversionProgress" : "conversionProgress conversionProgressHidden"} aria-live="polite">
+      <div className="conversionProgressHeader">
+        <span>Conversion</span>
+        <strong>{percent}%</strong>
+      </div>
+      <div className="conversionProgressTrack" aria-hidden="true">
+        <span style={{ width: `${percent}%` }} />
+      </div>
+      <ol className="conversionStepList">
+        {steps.map((step) => (
+          <li className={`conversionStep conversionStep-${step.state}`} key={step.id}>
+            <span className="conversionStepIcon" aria-hidden="true">
+              {step.state === "complete" ? <Check size={14} /> : null}
+            </span>
+            <span>
+              <strong>{step.label}</strong>
+              {step.detail ? <small>{step.detail}</small> : null}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 export function SolvysMidiApp() {
   const [activeTab, setActiveTab] = useState<TabId>("songs");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -371,6 +447,8 @@ export function SolvysMidiApp() {
   const [swipingSongId, setSwipingSongId] = useState("");
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [status, setStatus] = useState("");
+  const [conversionSteps, setConversionSteps] = useState<ConversionStep[]>([]);
+  const [conversionProgressVisible, setConversionProgressVisible] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [health, setHealth] = useState<HealthState>(DEFAULT_HEALTH);
   const [storageLoaded, setStorageLoaded] = useState(false);
@@ -387,6 +465,8 @@ export function SolvysMidiApp() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
   const stopPreviewRef = useRef<(() => void) | null>(null);
+  const progressFadeTimerRef = useRef<number | null>(null);
+  const progressClearTimerRef = useRef<number | null>(null);
   const swipeRef = useRef({
     pointerId: -1,
     startX: 0,
@@ -519,6 +599,12 @@ export function SolvysMidiApp() {
         cancelAnimationFrame(rafRef.current);
       }
       audioContextRef.current?.close().catch(() => undefined);
+      if (progressFadeTimerRef.current !== null) {
+        window.clearTimeout(progressFadeTimerRef.current);
+      }
+      if (progressClearTimerRef.current !== null) {
+        window.clearTimeout(progressClearTimerRef.current);
+      }
     };
   }, []);
 
@@ -543,6 +629,132 @@ export function SolvysMidiApp() {
 
   function updateForm(key: keyof typeof formState, value: string) {
     setFormState((current) => ({ ...current, [key]: value }));
+  }
+
+  function clearProgressTimers() {
+    if (progressFadeTimerRef.current !== null) {
+      window.clearTimeout(progressFadeTimerRef.current);
+      progressFadeTimerRef.current = null;
+    }
+    if (progressClearTimerRef.current !== null) {
+      window.clearTimeout(progressClearTimerRef.current);
+      progressClearTimerRef.current = null;
+    }
+  }
+
+  function startConversionProgress(flow: ConversionFlow, firstStepId: string) {
+    clearProgressTimers();
+    setConversionProgressVisible(true);
+    setConversionSteps(
+      CONVERSION_STEPS[flow].map((step) => ({
+        ...step,
+        detail: step.id === firstStepId ? "Starting" : "",
+        state: step.id === firstStepId ? "active" : "pending",
+      })),
+    );
+  }
+
+  function setProgressStep(stepId: string, state: ConversionStepState, detail = "") {
+    setConversionSteps((current) =>
+      current.map((step) =>
+        step.id === stepId
+          ? {
+              ...step,
+              detail,
+              state,
+            }
+          : step,
+      ),
+    );
+  }
+
+  function completeProgressStep(stepId: string, detail = "Done") {
+    setProgressStep(stepId, "complete", detail);
+  }
+
+  function activateProgressStep(stepId: string, detail = "Working") {
+    setConversionProgressVisible(true);
+    setProgressStep(stepId, "active", detail);
+  }
+
+  function failProgress(message: string) {
+    setConversionProgressVisible(true);
+    setConversionSteps((current) =>
+      current.map((step) =>
+        step.state === "active"
+          ? {
+              ...step,
+              detail: message,
+              state: "error",
+            }
+          : step,
+      ),
+    );
+  }
+
+  function finishProgress(message = "Complete", onSettled?: () => void) {
+    setConversionSteps((current) =>
+      current.map((step) => ({
+        ...step,
+        detail: step.detail || message,
+        state: "complete",
+      })),
+    );
+    setConversionProgressVisible(true);
+    clearProgressTimers();
+    progressFadeTimerRef.current = window.setTimeout(() => {
+      setConversionProgressVisible(false);
+    }, 1400);
+    progressClearTimerRef.current = window.setTimeout(() => {
+      setConversionSteps([]);
+      onSettled?.();
+    }, 2100);
+  }
+
+  function syncYoutubeProgress(workerStatus = "") {
+    const normalized = workerStatus.toLowerCase();
+    if (/download/.test(normalized)) {
+      completeProgressStep("queue", "Queued");
+      activateProgressStep("download", workerStatus);
+      return;
+    }
+    if (/prepar/.test(normalized)) {
+      completeProgressStep("download", "Audio ready");
+      activateProgressStep("transcribe", workerStatus);
+      return;
+    }
+    if (/pitch|transkun|transcrib/.test(normalized)) {
+      completeProgressStep("download", "Audio ready");
+      activateProgressStep("transcribe", workerStatus);
+      return;
+    }
+    if (/arrang/.test(normalized)) {
+      completeProgressStep("transcribe", "Notes detected");
+      activateProgressStep("arrange", workerStatus);
+      return;
+    }
+    if (/ready|midi/.test(normalized)) {
+      completeProgressStep("download", "Audio ready");
+      completeProgressStep("transcribe", "Notes detected");
+      completeProgressStep("arrange", "MIDI ready");
+    }
+  }
+
+  function fillFormFromResult(result: Partial<TranscriptionPayload> & Partial<ReturnType<typeof convertMusicXmlToMidi>>) {
+    setFormState((current) => ({
+      ...current,
+      title: current.title.trim() || result.title || current.title,
+      artist: current.artist.trim() || result.artist || current.artist,
+      year: current.year.trim() || result.year || new Date().getFullYear().toString(),
+      genre: current.genre || result.genre || "Classical",
+      subGenre: current.subGenre || result.subGenre || "Piano Solo",
+    }));
+  }
+
+  function revealCompletedSong(songId: string) {
+    setSelectedId(songId);
+    setActiveTab("songs");
+    setDrawerOpen(false);
   }
 
   function scoreMimeType(file: File) {
@@ -750,6 +962,8 @@ export function SolvysMidiApp() {
     }
 
     setStatus(startPayload.status || "Audio transcription queued");
+    completeProgressStep("queue", "Queued");
+    activateProgressStep("download", startPayload.status || "Waiting for audio worker");
 
     const startedAt = Date.now();
     const timeoutMs = 20 * 60 * 1000;
@@ -769,6 +983,7 @@ export function SolvysMidiApp() {
       if (payload.status && payload.status !== lastStatus) {
         lastStatus = payload.status;
         setStatus(payload.status);
+        syncYoutubeProgress(payload.status);
       }
 
       if (payload.state === "failed") {
@@ -780,6 +995,8 @@ export function SolvysMidiApp() {
           throw new Error("The audio worker did not return a MIDI file.");
         }
 
+        completeProgressStep("transcribe", "Notes detected");
+        completeProgressStep("arrange", "MIDI ready");
         return payload.transcription;
       }
     }
@@ -907,6 +1124,7 @@ export function SolvysMidiApp() {
     scoreAsset: Partial<SongEntry> = {},
   ) {
     const title = formState.title.trim() || result.title;
+    fillFormFromResult({ ...result, title });
     const entry: SongEntry = {
       id: crypto.randomUUID(),
       title,
@@ -937,8 +1155,6 @@ export function SolvysMidiApp() {
 
     setSongs((current) => mergeSongs([entry], current));
     setSelectedId(entry.id);
-    setActiveTab("songs");
-    setDrawerOpen(false);
     setStatus("SolvysMIDI ready");
 
     try {
@@ -951,6 +1167,8 @@ export function SolvysMidiApp() {
     if (settings.ioMode === "automatic") {
       window.setTimeout(() => exportSong(entry), 50);
     }
+
+    return entry;
   }
 
   async function addSongFromTranscription(
@@ -959,6 +1177,7 @@ export function SolvysMidiApp() {
     scoreAsset: Partial<SongEntry> = {},
   ) {
     const title = formState.title.trim() || result.title;
+    fillFormFromResult({ ...result, title });
     const entry: SongEntry = {
       id: result.storageId || crypto.randomUUID(),
       title,
@@ -991,8 +1210,6 @@ export function SolvysMidiApp() {
 
     setSongs((current) => mergeSongs([entry], current));
     setSelectedId(entry.id);
-    setActiveTab("songs");
-    setDrawerOpen(false);
     setPreviewProgress(0);
     setStatus(result.arrangement ? `${title} ready as ${result.arrangement}` : `${title} ready`);
 
@@ -1006,6 +1223,8 @@ export function SolvysMidiApp() {
     if (settings.ioMode === "automatic") {
       window.setTimeout(() => exportSong(entry), 50);
     }
+
+    return entry;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1025,9 +1244,15 @@ export function SolvysMidiApp() {
     try {
       setIsTranscribing(true);
       if (!file && hasYouTubeLink) {
+        startConversionProgress("youtube", "queue");
         setStatus("Starting YouTube transcription");
         const result = await transcribeYoutube();
-        await addSongFromTranscription(result, result.arrangement || "Playable YouTube arrangement");
+        activateProgressStep("store", "Saving MIDI and metadata");
+        const entry = await addSongFromTranscription(result, result.arrangement || "Playable YouTube arrangement");
+        completeProgressStep("store", "Saved");
+        activateProgressStep("metadata", "Filling title, artist, year, genre");
+        completeProgressStep("metadata", "Song info ready");
+        finishProgress("Conversion complete", () => revealCompletedSong(entry.id));
         return;
       }
 
@@ -1035,21 +1260,45 @@ export function SolvysMidiApp() {
         return;
       }
 
+      startConversionProgress(file.name.toLowerCase().endsWith(".pdf") ? "pdf" : "score", "read");
       setStatus("Reading score");
       const scoreAsset = await scoreAssetFromFile(file);
+      completeProgressStep("read", "Score loaded");
       if (file.name.toLowerCase().endsWith(".pdf")) {
+        activateProgressStep("upload", "Sending PDF to OMR worker");
         setStatus("Transcribing PDF");
         const result = await transcribePdf(file);
-        await addSongFromTranscription(result, file.name, scoreAsset);
+        completeProgressStep("upload", "OMR worker finished");
+        activateProgressStep("transcribe", "Reading notation");
+        completeProgressStep("transcribe", "Notation detected");
+        activateProgressStep("write", "Writing MIDI");
+        completeProgressStep("write", "MIDI ready");
+        activateProgressStep("store", "Saving MIDI and metadata");
+        const entry = await addSongFromTranscription(result, file.name, scoreAsset);
+        completeProgressStep("store", "Saved");
+        activateProgressStep("metadata", "Filling title, artist, year, genre");
+        completeProgressStep("metadata", "Song info ready");
+        finishProgress("Conversion complete", () => revealCompletedSong(entry.id));
         return;
       }
 
+      activateProgressStep("parse", "Parsing MusicXML");
       const xml = await readSheetMusicFile(file);
+      completeProgressStep("parse", "Notation parsed");
+      activateProgressStep("write", "Writing MIDI");
       setStatus("Writing MIDI");
       const result = convertMusicXmlToMidi(xml, file.name);
-      await addSongFromConversion(result, file.name, xml, scoreAsset);
+      completeProgressStep("write", "MIDI ready");
+      activateProgressStep("store", "Saving MIDI and metadata");
+      const entry = await addSongFromConversion(result, file.name, xml, scoreAsset);
+      completeProgressStep("store", "Saved");
+      activateProgressStep("metadata", "Filling title, artist, year, genre");
+      completeProgressStep("metadata", "Song info ready");
+      finishProgress("Conversion complete", () => revealCompletedSong(entry.id));
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Transcription failed");
+      const message = error instanceof Error ? error.message : "Transcription failed";
+      setStatus(message);
+      failProgress(message);
     } finally {
       setIsTranscribing(false);
     }
@@ -1398,10 +1647,11 @@ export function SolvysMidiApp() {
 
               <div className="buttonRow">
                 <button className="primaryButton" data-testid="transcribe-submit" type="submit" disabled={isTranscribing}>
-                  <Music2 size={19} />
+                  {isTranscribing ? <span className="primaryButtonSpinner" aria-hidden="true" /> : <Music2 size={19} />}
                   {isTranscribing ? "Transcribing" : "Transcribe"}
                 </button>
               </div>
+              <ConversionProgressPanel steps={conversionSteps} visible={conversionProgressVisible} />
               {status ? <p className="formStatus" aria-live="polite">{status}</p> : null}
             </form>
           )}

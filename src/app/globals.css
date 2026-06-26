@@ -1168,12 +1168,193 @@ a {
   opacity: 0.72;
 }
 
+.primaryButtonSpinner {
+  animation: conversionSpin 780ms linear infinite;
+  border: 2px solid color-mix(in srgb, var(--accent-ink) 28%, transparent);
+  border-radius: 999px;
+  border-top-color: var(--accent-ink);
+  height: 17px;
+  width: 17px;
+}
+
 .formStatus {
   margin: -4px 2px 0;
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.35;
   font-weight: 650;
+}
+
+.conversionProgress {
+  display: grid;
+  gap: 10px;
+  max-height: 360px;
+  opacity: 1;
+  overflow: hidden;
+  transform: translateY(0);
+  transition:
+    opacity 420ms ease,
+    transform 420ms ease,
+    max-height 420ms ease,
+    margin 420ms ease;
+}
+
+.conversionProgressHidden {
+  max-height: 0;
+  margin-top: -10px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+}
+
+.conversionProgressHeader {
+  align-items: center;
+  color: var(--text-muted);
+  display: flex;
+  font-size: 11px;
+  font-weight: 760;
+  justify-content: space-between;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.conversionProgressHeader strong {
+  color: var(--foreground);
+  font-size: 12px;
+}
+
+.conversionProgressTrack {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  height: 5px;
+  overflow: hidden;
+}
+
+.conversionProgressTrack span {
+  background: var(--accent);
+  display: block;
+  height: 100%;
+  transition: width 360ms ease;
+}
+
+.conversionStepList {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.conversionStep {
+  align-items: start;
+  color: var(--text-soft);
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 22px 1fr;
+  min-height: 28px;
+}
+
+.conversionStep strong,
+.conversionStep small {
+  display: block;
+}
+
+.conversionStep strong {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+.conversionStep small {
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.25;
+  margin-top: 2px;
+}
+
+.conversionStepIcon {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: var(--text-muted);
+  display: inline-flex;
+  height: 22px;
+  justify-content: center;
+  position: relative;
+  width: 22px;
+}
+
+.conversionStep-active .conversionStepIcon::before {
+  animation: conversionSpin 780ms linear infinite;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  content: "";
+  height: 16px;
+  width: 16px;
+}
+
+.conversionStep-active strong {
+  color: var(--foreground);
+}
+
+.conversionStep-complete .conversionStepIcon {
+  animation: conversionCheckPop 260ms ease both;
+  background: color-mix(in srgb, var(--accent) 78%, transparent);
+  color: var(--accent-ink);
+}
+
+.conversionStep-complete strong {
+  color: var(--foreground);
+}
+
+.conversionStep-error .conversionStepIcon {
+  background: rgba(255, 69, 58, 0.22);
+}
+
+.conversionStep-error .conversionStepIcon::before {
+  background: #ff453a;
+  border-radius: 999px;
+  content: "";
+  height: 8px;
+  width: 8px;
+}
+
+.conversionStep-error strong,
+.conversionStep-error small {
+  color: #ffb3ae;
+}
+
+@keyframes conversionSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes conversionCheckPop {
+  0% {
+    transform: scale(0.82);
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversionProgress,
+  .conversionProgressTrack span {
+    transition: none;
+  }
+
+  .conversionStep-active .conversionStepIcon::before,
+  .conversionStep-complete .conversionStepIcon,
+  .primaryButtonSpinner {
+    animation: none;
+  }
 }
 
 .ghostButton,
