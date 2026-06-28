@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { list, put } from "@vercel/blob";
+import { del, list, put } from "@vercel/blob";
 import { randomUUID } from "node:crypto";
 import { safeMidiFilename } from "@/lib/musicxml";
 import {
@@ -57,9 +57,12 @@ type PublicSongEntry = {
 };
 
 const SONG_POST_MAX_BYTES = numericEnv("SONG_POST_MAX_BYTES", 30 * 1024 * 1024);
+const SONG_DELETE_MAX_BYTES = numericEnv("SONG_DELETE_MAX_BYTES", 4 * 1024);
 const MIDI_MAX_BYTES = numericEnv("MIDI_MAX_BYTES", 10 * 1024 * 1024);
 const SCORE_MAX_BYTES = numericEnv("SCORE_MAX_BYTES", 20 * 1024 * 1024);
 const SONG_POSTS_PER_HOUR = numericEnv("SONG_POSTS_PER_HOUR", 24);
+const SONG_DELETES_PER_HOUR = numericEnv("SONG_DELETES_PER_HOUR", 48);
+const STORED_SONG_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$/;
 
 const SCORE_MIME_TYPES = new Set([
   "application/pdf",
@@ -89,6 +92,11 @@ function scorePath(id: string, filename: string) {
 function safeStorageId(value: unknown) {
   const cleaned = cleanText(value, 120).replace(/[^\w-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   return cleaned || randomUUID();
+}
+
+function existingStorageId(value: unknown) {
+  const id = cleanText(value, 120);
+  return STORED_SONG_ID_RE.test(id) ? id : "";
 }
 
 function publicArray<T>(value: unknown, max: number) {
@@ -225,4 +233,52 @@ export async function POST(request: NextRequest) {
   });
 
   return NextResponse.json({ song });
+}
+
+export async function DELETE(request: NextRequest) {
+  const originRejection = requireSameOrigin(request);
+  if (originRejection) {
+    return originRejection;
+  }
+
+  const rateLimitRejection = rateLimit(request, {
+    key: "songs:delete",
+    max: SONG_DELETES_PER_HOUR,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (rateLimitRejection) {
+    return rateLimitRejection;
+  }
+
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return jsonError("Shared song storage is not configured.", 503);
+  }
+
+  const parsed = await readJsonBody<{ id?: string } | null>(request, SONG_DELETE_MAX_BYTES);
+  if (parsed.error) {
+    return parsed.error;
+  }
+
+  const id = existingStorageId(parsed.body?.id);
+  if (!id) {
+    return jsonError("Song ID is invalid.", 400);
+  }
+
+  const [midiBlobs, scoreBlobs] = await Promise.all([
+    list({ prefix: `library/midi/${id}-`, limit: 100 }),
+    list({ prefix: `library/scores/${id}-`, limit: 100 }),
+  ]);
+  const paths = [
+    songPath(id),
+    ...midiBlobs.blobs.map((blob) => blob.pathname),
+    ...scoreBlobs.blobs.map((blob) => blob.pathname),
+  ];
+
+  await del(Array.from(new Set(paths)));
+
+  return NextResponse.json({
+    deleted: true,
+    id,
+    removedBlobs: paths.length,
+  });
 }
