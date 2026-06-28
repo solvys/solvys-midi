@@ -475,6 +475,7 @@ export function SolvysMidiApp() {
     axis: "" as "" | "x" | "y",
     moved: false,
   });
+  const suppressSongClickRef = useRef(false);
 
   useEffect(() => {
     let canceled = false;
@@ -1314,7 +1315,21 @@ export function SolvysMidiApp() {
     setStatus("Local data deleted");
   }
 
-  function deleteSong(song: SongEntry) {
+  async function deleteSharedSong(songId: string) {
+    const response = await fetch("/api/songs", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: songId }),
+    });
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    if (!response.ok) {
+      throw new Error(payload.error || "Shared song delete failed");
+    }
+  }
+
+  function removeSongFromView(song: SongEntry) {
     if (previewSongId === song.id) {
       stopPreview();
     }
@@ -1331,7 +1346,16 @@ export function SolvysMidiApp() {
       }
       return remaining;
     });
-    setStatus(`${song.title} deleted locally`);
+  }
+
+  async function deleteSong(song: SongEntry) {
+    removeSongFromView(song);
+    try {
+      await deleteSharedSong(song.id);
+      setStatus("");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Shared song delete failed");
+    }
   }
 
   function handleSongPointerDown(event: PointerEvent<HTMLButtonElement>, songId: string) {
@@ -1384,6 +1408,10 @@ export function SolvysMidiApp() {
 
     if (swipe.axis === "x" && swipe.moved) {
       setSwipedSongId(swipe.offset < -44 ? songId : "");
+      suppressSongClickRef.current = true;
+      window.setTimeout(() => {
+        suppressSongClickRef.current = false;
+      }, 250);
     }
 
     setSwipingSongId("");
@@ -1392,7 +1420,8 @@ export function SolvysMidiApp() {
   }
 
   function selectSong(songId: string) {
-    if (swipeRef.current.moved) {
+    if (suppressSongClickRef.current || swipeRef.current.moved) {
+      suppressSongClickRef.current = false;
       return;
     }
 
